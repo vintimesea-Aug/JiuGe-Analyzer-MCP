@@ -28,7 +28,11 @@ def test_validate_good():
         "core_arguments": ["point one with enough words to pass the five word threshold", "point two with enough words to pass the five word threshold"],
         "extended_thinking": "this is a long enough string that has many words and will definitely pass the five word minimum easily",
         "audience_guide": {"who_should_listen": ["tech enthusiasts", "business students"], "prerequisites": ["basic economics"], "best_scenarios": ["commute listening", "morning routine"]},
-        "overall_rating": {"info_density": 4, "knowledge_gain": 3, "value": 3},
+        "overall_rating": {
+            "recommendation": "⭐⭐⭐⭐",
+            "dimensions": {"info_density": 4, "argument_quality": 4, "knowledge_gain": 3, "brilliance": 4},
+            "weaknesses": "knowledge_gain could be deeper",
+        },
     }
     assert validate(analysis, FAST_REQUIRED) == []
 

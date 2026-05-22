@@ -1,6 +1,6 @@
 """Structured output schemas, prompt builders, and validation for podcast analysis."""
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 FAST_REQUIRED = [
     "overview",
@@ -38,6 +38,8 @@ def build_deep_system(lang: str) -> str:
         "Every field must be filled with substantive content. "
         "Do not use placeholder text, empty strings, or 'N/A'. "
         "Array fields need at least 2 items. String fields need at least 3 sentences."
+        "For overall_rating: each dimension score 1-5. 4-5=excellent, 3=passable, 1-2=failing. "
+        "Do NOT give all 5s. If any dimension is 1-3, explain the deduction in weaknesses."
     )
 
 
@@ -99,12 +101,22 @@ String fields: at least 3 sentences. Array fields: at least 2 items.
     "verdict": "final value judgment"
   }},
   "overall_rating": {{
-    "recommendation": 4,
+    "recommendation": "⭐⭐⭐⭐",
+    "dimensions": {{
+      "info_density": 4,
+      "argument_quality": 3,
+      "knowledge_gain": 4,
+      "brilliance": 3
+    }},
+    "strengths": "specific strong points",
+    "weaknesses": "for each dimension below 4, explain the deduction (required if any score < 4)",
     "best_audience": "who benefits most",
-    "core_value": "single biggest takeaway",
-    "shortcomings": "what could be improved"
+    "core_value": "single biggest takeaway"
   }}
 }}
+
+**Rating rules**: Each dimension 1-5. 4-5=excellent, 3=passable, 1-2=failing.
+Do NOT give all 5s. You MUST explain deductions in weaknesses for any score 1-3.
 
 Full Transcript:
 {transcript}"""
@@ -115,7 +127,9 @@ def build_fast_system(lang: str) -> str:
     return (
         f"You are a deep content analyst. Output a valid JSON object. {li} "
         "Every field must be filled substantively. "
-        "No placeholder text, empty strings, or 'N/A'."
+        "No placeholder text, empty strings, or 'N/A'. "
+        "For overall_rating: each dimension score 1-5. 4-5=excellent, 3=passable, 1-2=failing. "
+        "Do NOT give all 5s."
     )
 
 
@@ -168,11 +182,19 @@ String fields: at least 2 sentences. Array fields: at least 2 items.
     "best_scenarios": ["scenario 1", "scenario 2"]
   }},
   "overall_rating": {{
-    "info_density": 3,
-    "knowledge_gain": 3,
-    "value": 3
+    "recommendation": "⭐⭐⭐",
+    "dimensions": {{
+      "info_density": 3,
+      "argument_quality": 3,
+      "knowledge_gain": 3,
+      "brilliance": 3
+    }},
+    "weaknesses": "if any dimension below 4, explain the deduction"
   }}
-}}"""
+}}
+
+**Rating rules**: Each dimension 1-5. 4-5=excellent, 3=passable, 1-2=failing.
+Do NOT give all 5s."""
 
 
 def validate(analysis: dict, required: list[str]) -> list[str]:
@@ -195,13 +217,39 @@ def validate(analysis: dict, required: list[str]) -> list[str]:
         elif isinstance(val, (list, dict)) and not val:
             errors.append(f"Empty {type(val).__name__}: '{field}'")
 
-    # Depth checks for nested fields (only if present and non-empty)
+    # Overall rating — four-dimension rubric with enforcement
     or_ = analysis.get("overall_rating")
     if isinstance(or_, dict) and or_:
-        for k in ("recommendation", "best_audience", "core_value", "shortcomings", "info_density", "knowledge_gain", "value"):
-            val = or_.get(k)
-            if val is not None and isinstance(val, str) and not val.strip():
-                errors.append(f"Empty string: 'overall_rating.{k}'")
+        rec = or_.get("recommendation")
+        if rec is not None and isinstance(rec, str) and not rec.strip():
+            errors.append("Empty string: 'overall_rating.recommendation'")
+
+        dims = or_.get("dimensions")
+        if not isinstance(dims, dict):
+            errors.append("'overall_rating.dimensions' missing or not an object")
+        elif not dims:
+            errors.append("Empty dict: 'overall_rating.dimensions'")
+        else:
+            for k in ("info_density", "argument_quality", "knowledge_gain", "brilliance"):
+                v = dims.get(k)
+                if v is None:
+                    errors.append(f"Missing: 'overall_rating.dimensions.{k}'")
+                elif not isinstance(v, int) or v < 1 or v > 5:
+                    errors.append(f"'overall_rating.dimensions.{k}' = {v}, must be int 1-5")
+
+            vals = [dims.get(k) for k in ("info_density", "argument_quality", "knowledge_gain", "brilliance")]
+            if all(isinstance(v, int) and v == 5 for v in vals):
+                errors.append("All dimensions are 5 — not allowed (must have at least one non-5 score)")
+
+        weak = or_.get("weaknesses")
+        if weak is not None and isinstance(weak, str) and not weak.strip():
+            errors.append("Empty string: 'overall_rating.weaknesses'")
+
+        # If any dimension < 4, weaknesses must be non-empty
+        if isinstance(dims, dict) and dims:
+            low = any(isinstance(dims.get(k), int) and dims[k] < 4 for k in ("info_density", "argument_quality", "knowledge_gain", "brilliance"))
+            if low and (not weak or (isinstance(weak, str) and not weak.strip())):
+                errors.append("'overall_rating.weaknesses' is empty but some dimensions are below 4")
 
     fo = analysis.get("future_outlook")
     if isinstance(fo, dict) and fo:
