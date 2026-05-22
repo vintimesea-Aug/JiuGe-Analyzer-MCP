@@ -39,7 +39,7 @@ def build_deep_system(lang: str) -> str:
         "Do not use placeholder text, empty strings, or 'N/A'. "
         "Array fields need at least 2 items. String fields need at least 3 sentences."
         "For overall_rating: each dimension score 1-5. 4-5=excellent, 3=passable, 1-2=failing. "
-        "Do NOT give all 5s. If any dimension is 1-3, explain the deduction in weaknesses."
+        "If any dimension is 1-3, explain the deduction in weaknesses."
     )
 
 
@@ -116,7 +116,7 @@ String fields: at least 3 sentences. Array fields: at least 2 items.
 }}
 
 **Rating rules**: Each dimension 1-5. 4-5=excellent, 3=passable, 1-2=failing.
-Do NOT give all 5s. You MUST explain deductions in weaknesses for any score 1-3.
+Be honest and discriminating — genuine 5s are rare. You MUST explain deductions in weaknesses for any score 1-3.
 
 Full Transcript:
 {transcript}"""
@@ -129,7 +129,7 @@ def build_fast_system(lang: str) -> str:
         "Every field must be filled substantively. "
         "No placeholder text, empty strings, or 'N/A'. "
         "For overall_rating: each dimension score 1-5. 4-5=excellent, 3=passable, 1-2=failing. "
-        "Do NOT give all 5s."
+        "Be honest and discriminating — genuine 5s are rare."
     )
 
 
@@ -194,7 +194,7 @@ String fields: at least 2 sentences. Array fields: at least 2 items.
 }}
 
 **Rating rules**: Each dimension 1-5. 4-5=excellent, 3=passable, 1-2=failing.
-Do NOT give all 5s."""
+Be honest — genuine 5s are rare."""
 
 
 def validate(analysis: dict, required: list[str]) -> list[str]:
@@ -236,10 +236,6 @@ def validate(analysis: dict, required: list[str]) -> list[str]:
                     errors.append(f"Missing: 'overall_rating.dimensions.{k}'")
                 elif not isinstance(v, int) or v < 1 or v > 5:
                     errors.append(f"'overall_rating.dimensions.{k}' = {v}, must be int 1-5")
-
-            vals = [dims.get(k) for k in ("info_density", "argument_quality", "knowledge_gain", "brilliance")]
-            if all(isinstance(v, int) and v == 5 for v in vals):
-                errors.append("All dimensions are 5 — not allowed (must have at least one non-5 score)")
 
         weak = or_.get("weaknesses")
         if weak is not None and isinstance(weak, str) and not weak.strip():
