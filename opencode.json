@@ -5,5 +5,11 @@
     "auto": true,
     "prune": true,
     "reserved": 80000
+  },
+  "mcp": {
+    "jiuge-textbook": {
+      "type": "local",
+      "command": ["python", "-m", "servers.textbook"]
+    }
   }
 }
